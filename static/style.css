@@ -457,6 +457,16 @@ textarea { resize: vertical; }
 .table th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .4px; background: #fafbfe; }
 .table tbody tr { transition: background .2s ease, box-shadow .2s ease; }
 .table tbody tr:hover { background: #f7f9ff; box-shadow: inset 3px 0 0 var(--primary); }
+.check-col { width: 36px; text-align: center; }
+.check-col input[type="checkbox"] { cursor: pointer; accent-color: var(--primary); width: 15px; height: 15px; vertical-align: middle; }
+.batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.batch-bar form { margin: 0; }
 .actions { white-space: nowrap; }
 .input-mini { width: 96px !important; padding: 6px 8px !important; }
 .input-title { flex: 1; }

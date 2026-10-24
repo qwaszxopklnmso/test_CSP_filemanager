@@ -78,10 +78,18 @@
 
 <div class="card">
   <h2>考生列表（{{ rows|length }} 人）</h2>
+  <div class="batch-bar">
+    <span id="batch-selected" class="muted" hidden>已选 <b id="batch-count">0</b> 人</span>
+    <form id="batch-delete-form" method="post" action="{{ url_for('admin_delete_students_batch') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button type="submit" id="batch-delete-btn" class="btn btn-small btn-danger" disabled>批量删除</button>
+    </form>
+  </div>
   <div class="table-scroll">
     <table class="table">
       <thead>
         <tr>
+          <th class="check-col"><input type="checkbox" id="select-all" aria-label="全选考生"></th>
           <th>考号</th><th>姓名</th><th>状态</th><th>提交情况</th><th>创建时间</th><th>操作</th>
         </tr>
       </thead>
@@ -89,6 +97,7 @@
         {% for row in rows %}
         {% set s = row.student %}
         <tr>
+          <td class="check-col"><input type="checkbox" class="row-check" value="{{ s.id }}" data-exam-id="{{ s.exam_id }}" aria-label="选择考生 {{ s.exam_id }}"></td>
           <td class="mono">{{ s.exam_id }}</td>
           <td>{{ s.name or '—' }}</td>
           <td>
@@ -117,7 +126,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="muted center">暂无考生，请先新增或导入。</td></tr>
+        <tr><td colspan="7" class="muted center">暂无考生，请先新增或导入。</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -1163,6 +1163,48 @@ def admin_delete_student(sid):
     return redirect(url_for("admin_students"))
 
 
+@app.route("/admin/students/delete-batch", methods=["POST"])
+@admin_required
+def admin_delete_students_batch():
+    ids = []
+    for raw in request.form.getlist("student_ids"):
+        try:
+            sid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if sid > 0:
+            ids.append(sid)
+    ids = sorted(set(ids))
+    if not ids:
+        flash("请先勾选要删除的考生。", "error")
+        return redirect(url_for("admin_students"))
+
+    db = get_db()
+    deleted = []
+    for sid in ids:
+        student = db.execute("SELECT * FROM students WHERE id=?", (sid,)).fetchone()
+        if student is None:
+            continue
+        db.execute("DELETE FROM submissions WHERE student_id=?", (sid,))
+        db.execute("DELETE FROM students WHERE id=?", (sid,))
+        deleted.append(student["exam_id"])
+    db.commit()
+
+    for exam_id in deleted:
+        folder = os.path.join(config.SUBMISSIONS_DIR, exam_id)
+        if os.path.isdir(folder):
+            shutil.rmtree(folder, ignore_errors=True)
+
+    if deleted:
+        shown = "、".join(deleted[:10])
+        if len(deleted) > 10:
+            shown += " 等 %d 人" % len(deleted)
+        flash("已删除 %d 名考生及其提交文件：%s。" % (len(deleted), shown), "success")
+    else:
+        flash("没有可删除的考生。", "error")
+    return redirect(url_for("admin_students"))
+
+
 @app.route("/admin/problems")
 @admin_required
 def admin_problems():
