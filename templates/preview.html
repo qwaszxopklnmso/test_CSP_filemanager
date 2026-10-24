@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}预览 {{ problem_title }} · CSP 第二轮文件回收系统{% endblock %}
+{% block content %}
+<section class="page-head preview-head">
+  <div>
+    <h1 class="preview-title">{{ problem_title }}</h1>
+    <p class="muted">{{ subtitle }}</p>
+  </div>
+  <div class="preview-actions">
+    <a class="btn btn-ghost" href="{{ back_url }}">返回</a>
+    <a class="btn btn-primary" href="{{ download_url }}">下载源文件</a>
+  </div>
+</section>
+
+{% if truncated %}
+  <div class="flash flash-warn">文件较大，仅预览前 {{ byte_size|fmt_size }}，完整内容请下载源文件。</div>
+{% endif %}
+
+<div class="card code-card">
+  <div class="code-toolbar">
+    <div class="code-dots"><span></span><span></span><span></span></div>
+    <span class="code-name">{{ filename }}</span>
+    <div class="code-tools">
+      <span class="code-lang">C++</span>
+      <button type="button" class="btn btn-small btn-ghost copy-btn" data-copy-target="raw-code">复制代码</button>
+    </div>
+  </div>
+  <div class="code-scroll">
+    <table class="code-table">
+      <tbody>
+        {% for line in lines %}
+        <tr>
+          <td class="ln">{{ loop.index }}</td>
+          <td class="line">{{ line|safe }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="code-status">{{ line_count }} 行 · {{ byte_size|fmt_size }} · 语法高亮预览</div>
+</div>
+
+<textarea id="raw-code" class="raw-source" readonly spellcheck="false">{{ code_text }}</textarea>
+
+<script>
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var source = document.getElementById(btn.dataset.copyTarget);
+      var text = source.value;
+      var done = function () {
+        var original = '复制代码';
+        btn.textContent = '已复制';
+        setTimeout(function () { btn.textContent = original; }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () {
+          source.select();
+          document.execCommand('copy');
+          done();
+        });
+      } else {
+        source.select();
+        document.execCommand('copy');
+        done();
+      }
+    });
+  });
+</script>
+{% endblock %}

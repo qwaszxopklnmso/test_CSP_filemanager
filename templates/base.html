@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CSP 第二轮文件回收系统{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">CSP 第二轮 · 文件回收系统</div>
+    <nav class="topnav">
+      {% if session.get('student_exam_id') %}
+        <span class="who">考号 {{ session.get('student_exam_id') }}</span>
+        <a href="{{ url_for('dashboard') }}">文件回收</a>
+        <form method="post" action="{{ url_for('logout') }}" class="inline">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button type="submit" class="link-btn">退出登录</button>
+        </form>
+      {% elif session.get('admin_id') %}
+        <span class="who">管理员 {{ session.get('admin_username') }}</span>
+        <a href="{{ url_for('admin_dashboard') }}">后台首页</a>
+        <form method="post" action="{{ url_for('admin_logout') }}" class="inline">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button type="submit" class="link-btn">退出登录</button>
+        </form>
+      {% else %}
+        <a href="{{ url_for('login') }}">选手登录</a>
+        <a href="{{ url_for('admin_login') }}">管理员入口</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  <div class="test-banner" role="note">
+    <strong>测试 / 练习环境</strong> · 本系统仅用于测试与练习，请勿用于正式比赛或生产环境。
+  </div>
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-list">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">CSP 第二轮竞赛文件回收系统 · 测试/练习专用 · 请以服务器时间为准</footer>
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>

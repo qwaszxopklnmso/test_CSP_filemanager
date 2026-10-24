@@ -1,0 +1,128 @@
+{% extends "admin_base.html" %}
+{% block title %}题目资料 · CSP 第二轮{% endblock %}
+{% block admin_content %}
+<section class="page-head">
+  <div>
+    <h1>题目资料</h1>
+    <p class="muted">上传一个 CSP 格式的完整题目数据包，供所有选手下载。</p>
+  </div>
+</section>
+
+<div class="card">
+  <div class="package-head">
+    <div>
+      <h2>题目数据压缩包</h2>
+      <p class="muted">压缩包内应只有一个根文件夹：根目录放一份题目 PDF，同目录放四个题目文件夹，每个文件夹内放 <code>题目名0x.in</code> / <code>题目名0x.ans</code>。<code>0x</code> 通常为 01–03，也可能更多或采用其他编号，系统按实际文件数量统计，不限制测试点个数。</p>
+    </div>
+    {% if data_package %}
+      <a class="btn btn-ghost" href="{{ url_for('admin_data_zip_download') }}">下载检查</a>
+    {% endif %}
+  </div>
+
+  {% if data_package %}
+    <div class="package-meta">
+      <span class="tag tag-ok">{{ data_package.name }}</span>
+      <span>{{ data_package.size|fmt_size }}</span>
+      <span class="muted">更新于 {{ data_package.updated|fmt_dt }}</span>
+    </div>
+
+    <div class="package-structure">
+      <p><strong>根文件夹：</strong>
+        {% if data_package.info.root %}<code>{{ data_package.info.root }}/</code>{% else %}<span class="muted">未检测到单一根文件夹</span>{% endif %}
+        <span class="muted">· 共 {{ data_package.info.file_count }} 个文件</span>
+      </p>
+      <p><strong>题目 PDF：</strong>
+        {% for pdf in data_package.info.pdfs %}
+          <span class="tag tag-ok">{{ pdf }}</span>
+        {% else %}
+          <span class="tag tag-pending">根目录未找到 PDF</span>
+        {% endfor %}
+      </p>
+
+      {% if data_package.info.folders %}
+      <div class="table-scroll">
+        <table class="table structure-table">
+          <thead><tr><th>题目文件夹</th><th>测试点</th><th>.in</th><th>.ans</th><th>配对情况</th></tr></thead>
+          <tbody>
+            {% for folder in data_package.info.folders %}
+            <tr>
+              <td class="mono">{{ folder.name }}/</td>
+              <td>{{ folder.cases }}</td>
+              <td>{{ folder.ins }}</td>
+              <td>{{ folder.ans }}</td>
+              <td>
+                {% if folder.missing_ans or folder.missing_in %}
+                  <span class="tag tag-pending">存在缺对</span>
+                {% else %}
+                  <span class="tag tag-ok">完整</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      {% if data_package.info.warnings %}
+        <div class="package-warnings">
+          {% for warning in data_package.info.warnings %}
+            <div class="flash flash-warn">{{ warning }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+
+    <form method="post" action="{{ url_for('admin_data_zip_delete') }}" onsubmit="return confirm('确定删除当前题目数据压缩包？选手将无法下载。');">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-small btn-danger">删除数据包</button>
+    </form>
+  {% else %}
+    <p class="muted">尚未上传题目数据压缩包，选手端暂无下载入口。</p>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('admin_data_zip_upload') }}" enctype="multipart/form-data" class="stack-form upload-package-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label class="file-drop">
+      <input class="file-input" name="file" type="file" accept=".zip" required>
+      <span class="file-drop-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"></path>
+          <path d="m3 8 2-4h14l2 4"></path><path d="M12 11v6"></path><path d="m9 14 3-3 3 3"></path>
+        </svg>
+      </span>
+      <span class="file-drop-body">
+        <span class="file-drop-title">点击选择题目数据包（.zip）</span>
+        <span class="file-drop-hint">也可以拖拽到这里 · 最大 200 MB</span>
+      </span>
+      <span class="file-chip" data-file-name>未选择文件</span>
+    </label>
+    <button type="submit" class="btn btn-primary">上传 / 替换数据包</button>
+  </form>
+
+  <pre class="zip-tree">示例结构：
+CSP-S2-题目数据.zip
+└─ CSP-S2/
+   ├─ 题目.pdf
+   ├─ 题目一/  题目一01.in  题目一01.ans  题目一02.in  题目一02.ans  ...（数量不限）
+   ├─ 题目二/  题目二01.in  题目二01.ans  ...
+   ├─ 题目三/  题目三01.in  题目三01.ans  ...
+   └─ 题目四/  题目四01.in  题目四01.ans  ...</pre>
+</div>
+
+<div class="problem-grid admin-problem-grid">
+  {% for p in rows %}
+  <article class="card">
+    <div class="problem-head">
+      <h2>{{ p.title }}</h2>
+    </div>
+    <form method="post" action="{{ url_for('admin_problem_title', code=p.code) }}" class="inline-form title-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input name="title" type="text" value="{{ p.title }}" required class="input-title">
+      <button type="submit" class="btn btn-small">保存名称</button>
+    </form>
+    <div class="muted small">最近更新：{{ p.updated_at|fmt_dt }}</div>
+  </article>
+  {% endfor %}
+</div>
+{% endblock %}

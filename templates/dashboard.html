@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}文件回收 · CSP 第二轮{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <h1>文件回收</h1>
+    <p class="muted">考号 {{ student.exam_id }}{% if student.name %} · {{ student.name }}{% endif %} · 已完成 {{ submitted_count }} / {{ total_count }} 题</p>
+  </div>
+  <div class="status-pill status-{{ state }}">{{ message }}</div>
+</section>
+
+<div class="notice">
+  <strong>提交说明：</strong>只接受 <code>.cpp</code> 源文件，单文件不超过 10 MB；截止前可反复上传，系统保留最后一次提交；截止后自动锁定。
+  {% if settings.contest_start %}<span class="muted">开始时间：{{ settings.contest_start|fmt_dt }}</span>{% endif %}
+  {% if settings.contest_end %}<span class="muted">截止时间：{{ settings.contest_end|fmt_dt }}</span>{% endif %}
+</div>
+
+<div class="card data-package">
+  <div class="data-package-info">
+    <h2>题目数据压缩包</h2>
+    {% if data_package %}
+      <p class="muted">
+        {{ data_package.name }} · {{ data_package.size|fmt_size }}
+        {% if data_package.updated %} · 更新于 {{ data_package.updated|fmt_dt }}{% endif %}
+      </p>
+      <p>压缩包内含题目 PDF 与四道题的测试数据（<code>.in</code> / <code>.ans</code>，测试点数量不限），请下载后解压查看。</p>
+    {% else %}
+      <p class="muted">题目数据包尚未上传，请联系监考老师。</p>
+    {% endif %}
+  </div>
+  {% if data_package %}
+    <a class="btn btn-primary" href="{{ url_for('download_data_package') }}">下载题目数据压缩包</a>
+  {% endif %}
+</div>
+
+<div class="problem-grid">
+  {% for row in rows %}
+  {% set problem = row.problem %}
+  {% set submission = row.submission %}
+  <article class="card problem-card">
+    <div class="problem-head">
+      <h2>{{ problem.title }}</h2>
+    </div>
+
+    <div class="submit-info">
+      {% if submission %}
+        <div class="tag tag-ok">已提交</div>
+        <dl class="meta">
+          <dt>文件名</dt><dd>{{ submission.original_name }}</dd>
+          <dt>提交时间</dt><dd>{{ submission.submitted_at|fmt_dt }}</dd>
+          <dt>大小</dt><dd>{{ submission.size|fmt_size }}</dd>
+          <dt>SHA-256</dt><dd class="hash">{{ submission.sha256 }}</dd>
+        </dl>
+        <div class="submission-actions">
+          <a class="btn btn-primary btn-small" href="{{ url_for('preview_own_submission', code=problem.code) }}">在线预览</a>
+          <a class="btn btn-ghost btn-small" href="{{ url_for('download_own_submission', code=problem.code) }}">下载源文件</a>
+        </div>
+      {% else %}
+        <div class="tag tag-pending">未提交</div>
+        <p class="muted small">尚未提交本题。</p>
+      {% endif %}
+    </div>
+
+    <form method="post" action="{{ url_for('submit_file', code=problem.code) }}" enctype="multipart/form-data" class="upload-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label class="file-drop{% if not is_open %} is-disabled{% endif %}">
+        <input class="file-input" type="file" name="file" accept=".cpp" required {% if not is_open %}disabled{% endif %}>
+        <span class="file-drop-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path>
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
+          </svg>
+        </span>
+        <span class="file-drop-body">
+          <span class="file-drop-title">点击选择 .cpp 文件</span>
+          <span class="file-drop-hint">也可以把文件拖到这里 · 最大 10 MB</span>
+        </span>
+        <span class="file-chip" data-file-name>未选择文件</span>
+      </label>
+      <button type="submit" class="btn btn-primary" {% if not is_open %}disabled{% endif %}>
+        {% if submission %}重新上传覆盖{% else %}上传提交{% endif %}
+      </button>
+      {% if not is_open %}<p class="muted small">当前不可提交：{{ message }}</p>{% endif %}
+    </form>
+  </article>
+  {% endfor %}
+</div>
+{% endblock %}

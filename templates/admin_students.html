@@ -1,0 +1,99 @@
+{% extends "admin_base.html" %}
+{% block title %}考生管理 · CSP 第二轮{% endblock %}
+{% block admin_content %}
+<section class="page-head">
+  <div>
+    <h1>考生管理</h1>
+    <p class="muted">新增考生、批量导入、重置密码、启用/禁用与删除。</p>
+  </div>
+</section>
+
+<div class="two-col">
+  <div class="card">
+    <h2>新增考生</h2>
+    <form method="post" action="{{ url_for('admin_students') }}" class="stack-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label>考号</label>
+      <input name="exam_id" type="text" placeholder="{{ exam_id_hint }}" required>
+      <label>姓名（可选）</label>
+      <input name="name" type="text" placeholder="选手姓名">
+      <label>密码（留空自动生成）</label>
+      <input name="password" type="text" placeholder="至少 6 位">
+      <button type="submit" class="btn btn-primary">新增考生</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>批量导入</h2>
+    <form method="post" action="{{ url_for('admin_students_import') }}" enctype="multipart/form-data" class="stack-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label>CSV 文件（UTF-8，可选）</label>
+      <label class="file-drop file-drop-compact">
+        <input class="file-input" name="file" type="file" accept=".csv,text/csv,text/plain">
+        <span class="file-drop-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h8"></path>
+          </svg>
+        </span>
+        <span class="file-drop-body">
+          <span class="file-drop-title">选择 CSV 文件</span>
+          <span class="file-drop-hint">也可以直接粘贴下方文本</span>
+        </span>
+        <span class="file-chip" data-file-name>未选择文件</span>
+      </label>
+      <label>或粘贴内容，每行：考号,密码,姓名</label>
+      <textarea name="text" rows="5" placeholder="HL-J0001,123456,张三&#10;HL-J0002,123456,李四"></textarea>
+      <button type="submit" class="btn btn-primary">开始导入</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>考生列表（{{ rows|length }} 人）</h2>
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>考号</th><th>姓名</th><th>状态</th><th>提交情况</th><th>创建时间</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        {% set s = row.student %}
+        <tr>
+          <td class="mono">{{ s.exam_id }}</td>
+          <td>{{ s.name or '—' }}</td>
+          <td>
+            {% if s.enabled %}<span class="tag tag-ok">启用</span>{% else %}<span class="tag tag-off">禁用</span>{% endif %}
+          </td>
+          <td class="subs-cell">
+            {% for p in problems %}
+              <span class="mini-tag {% if p.code in row.submitted %}mini-ok{% else %}mini-off{% endif %}" title="{{ p.title }}">{{ p.title }}</span>
+            {% endfor %}
+          </td>
+          <td class="muted">{{ s.created_at|fmt_dt }}</td>
+          <td class="actions">
+            <form method="post" action="{{ url_for('admin_reset_password', sid=s.id) }}" class="inline-form">
+              <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+              <input name="password" type="text" placeholder="新密码" class="input-mini" required>
+              <button type="submit" class="btn btn-small">重置</button>
+            </form>
+            <form method="post" action="{{ url_for('admin_toggle_student', sid=s.id) }}" class="inline-form">
+              <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+              <button type="submit" class="btn btn-small btn-ghost">{% if s.enabled %}禁用{% else %}启用{% endif %}</button>
+            </form>
+            <form method="post" action="{{ url_for('admin_delete_student', sid=s.id) }}" class="inline-form" onsubmit="return confirm('确定删除考生 {{ s.exam_id }} 及其提交文件？此操作不可恢复。');">
+              <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+              <button type="submit" class="btn btn-small btn-danger">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted center">暂无考生，请先新增或导入。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

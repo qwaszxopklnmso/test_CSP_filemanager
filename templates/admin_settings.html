@@ -1,0 +1,48 @@
+{% extends "admin_base.html" %}
+{% block title %}比赛设置 · CSP 第二轮{% endblock %}
+{% block admin_content %}
+<section class="page-head">
+  <div>
+    <h1>比赛设置</h1>
+    <p class="muted">当前状态：{{ message }}</p>
+  </div>
+</section>
+
+<div class="two-col">
+  <div class="card">
+    <h2>时间与开关</h2>
+    <form method="post" action="{{ url_for('admin_settings') }}" class="stack-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label>比赛开始时间（留空表示不限）</label>
+      <input name="contest_start" type="datetime-local" value="{{ settings.contest_start }}">
+      <label>提交截止时间（留空表示不限）</label>
+      <input name="contest_end" type="datetime-local" value="{{ settings.contest_end }}">
+      <label class="check-line">
+        <input type="checkbox" name="submissions_enabled" {% if settings.submissions_enabled == '1' %}checked{% endif %}>
+        允许学生提交
+      </label>
+      <label class="check-line">
+        <input type="checkbox" name="login_enabled" {% if settings.login_enabled == '1' %}checked{% endif %}>
+        允许学生登录
+      </label>
+      <button type="submit" class="btn btn-primary">保存设置</button>
+    </form>
+    <p class="muted small">所有时间以服务器本地时间为准。截止后学生端自动锁定上传，服务端同时拒绝提交请求。</p>
+  </div>
+
+  <div class="card">
+    <h2>修改管理员密码</h2>
+    <form method="post" action="{{ url_for('admin_change_password') }}" class="stack-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label>当前密码</label>
+      <input name="old_password" type="password" required autocomplete="current-password">
+      <label>新密码（至少 6 位）</label>
+      <input name="new_password" type="password" required autocomplete="new-password">
+      <label>确认新密码</label>
+      <input name="confirm_password" type="password" required autocomplete="new-password">
+      <button type="submit" class="btn btn-primary">修改密码</button>
+    </form>
+    <p class="muted small">正式比赛前请务必修改初始密码。</p>
+  </div>
+</div>
+{% endblock %}

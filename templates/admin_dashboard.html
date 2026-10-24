@@ -1,0 +1,55 @@
+{% extends "admin_base.html" %}
+{% block title %}后台概览 · CSP 第二轮{% endblock %}
+{% block admin_content %}
+<section class="page-head">
+  <div>
+    <h1>后台概览</h1>
+    <p class="muted">当前状态：{{ message }}</p>
+  </div>
+  <a class="btn btn-ghost" href="{{ url_for('admin_settings') }}">比赛设置</a>
+</section>
+
+<div class="stat-grid">
+  <div class="card stat"><span class="stat-num">{{ total_students }}</span><span class="stat-label">考生总数</span></div>
+  <div class="card stat"><span class="stat-num">{{ enabled_students }}</span><span class="stat-label">启用账号</span></div>
+  <div class="card stat"><span class="stat-num">{{ total_submissions }}</span><span class="stat-label">已收提交</span></div>
+  <div class="card stat"><span class="stat-num">{{ (total_students * 4 - total_submissions) if total_students * 4 > total_submissions else 0 }}</span><span class="stat-label">缺交份数</span></div>
+</div>
+
+<div class="card">
+  <h2>各题回收情况</h2>
+  <table class="table">
+    <thead>
+      <tr><th>题目</th><th>已提交</th><th>未提交</th></tr>
+    </thead>
+    <tbody>
+      {% for item in problem_stats %}
+      <tr>
+        <td>{{ item.title }}</td>
+        <td>{{ item.submitted }}</td>
+        <td>{{ item.missing }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted small">
+    题目数据压缩包：
+    {% if data_package %}
+      <span class="tag tag-ok">已上传</span> {{ data_package.name }}
+    {% else %}
+      <span class="tag tag-pending">未上传</span>
+    {% endif %}
+    · <a href="{{ url_for('admin_problems') }}">前往管理</a>
+  </p>
+</div>
+
+<div class="card">
+  <h2>快捷操作</h2>
+  <div class="quick-links">
+    <a class="btn btn-primary" href="{{ url_for('admin_students') }}">导入考生</a>
+    <a class="btn btn-ghost" href="{{ url_for('admin_problems') }}">管理题目数据</a>
+    <a class="btn btn-ghost" href="{{ url_for('admin_submissions') }}">查看提交</a>
+    <a class="btn btn-ghost" href="{{ url_for('admin_submission_download_all') }}">打包下载全部提交</a>
+  </div>
+</div>
+{% endblock %}

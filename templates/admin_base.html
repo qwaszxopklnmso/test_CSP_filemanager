@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="admin-layout">
+  <aside class="admin-nav">
+    <a class="{% if request.endpoint == 'admin_dashboard' %}active{% endif %}" href="{{ url_for('admin_dashboard') }}">后台概览</a>
+    <a class="{% if request.endpoint == 'admin_students' %}active{% endif %}" href="{{ url_for('admin_students') }}">考生管理</a>
+    <a class="{% if request.endpoint == 'admin_problems' %}active{% endif %}" href="{{ url_for('admin_problems') }}">题目资料</a>
+    <a class="{% if request.endpoint == 'admin_submissions' %}active{% endif %}" href="{{ url_for('admin_submissions') }}">提交管理</a>
+    <a class="{% if request.endpoint == 'admin_settings' %}active{% endif %}" href="{{ url_for('admin_settings') }}">比赛设置</a>
+  </aside>
+  <section class="admin-main">
+    {% block admin_content %}{% endblock %}
+  </section>
+</div>
+{% endblock %}

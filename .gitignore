@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime data & secrets
+data/
+*.db
+*.sqlite3
+*.log
+.env
+secret_key
+
+# Local launchers / temp files
+_run_hidden.vbs
+_init_check.py
+_snap*
+*.tmp
+*.bak
+*.swp
+*~
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
