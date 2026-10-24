@@ -46,6 +46,8 @@ python app.py
 
 请使用真实的 CPython 安装，不要使用 Microsoft Store 的 Python 别名。
 
+也可以直接双击 `run_server.bat`：它会打开可见的控制台窗口，实时输出启动信息和每次访问日志；关闭窗口即停止服务。
+
 ### Linux / macOS
 
 ```bash
@@ -64,6 +66,15 @@ CSP_HOST=127.0.0.1 CSP_PORT=8010 python app.py
 ```
 
 启动后访问 `http://127.0.0.1:8010`。首次启动会自动创建 `data/`、SQLite 数据库、会话密钥和示例账号。
+
+### 登录入口
+
+| 入口 | 地址 | 账号类型 |
+| --- | --- | --- |
+| 选手登录 | `/login` | 考号，例如 `HL-J0001` |
+| 管理员登录 | `/admin/login` | 管理员账号，例如 `admin` |
+
+管理员账号不能从选手登录页登录，请使用页面右上角的「管理员入口」。
 
 ### 测试账号
 
@@ -111,6 +122,7 @@ CSP-S2-题目数据.zip
 ├── app.py                     # Flask 入口与路由
 ├── config.py                  # 配置项
 ├── requirements.txt           # Python 依赖
+├── run_server.bat             # Windows 可见控制台启动脚本
 ├── static/
 │   ├── style.css              # 页面样式与动效
 │   └── app.js                 # 文件拖拽、水波纹、数字滚动
@@ -121,6 +133,13 @@ CSP-S2-题目数据.zip
     ├── problems/
     └── submissions/
 ```
+
+## app.py 与 config.py 的区别
+
+- `app.py`：程序入口与业务逻辑。负责创建 Flask 应用、初始化数据库、定义所有路由、登录鉴权、文件上传/下载、数据包解析、在线预览和后台操作。
+- `config.py`：只放配置常量。包括路径、考号规则、上传大小限制、内部题位、初始题目名称、默认管理员和示例考生、监听地址与端口。
+
+简单说：`config.py` 回答“参数是多少”，`app.py` 回答“程序怎么运行”。修改端口、上限或默认账号时改 `config.py`；修改页面行为或接口时改 `app.py`。
 
 ## 配置
 

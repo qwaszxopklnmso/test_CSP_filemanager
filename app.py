@@ -635,6 +635,10 @@ def login():
             flash("请输入考号与密码。", "error")
             return render_template("login.html"), 400
 
+        if exam_id == config.DEFAULT_ADMIN_USERNAME.upper():
+            flash("管理员账号请从右上角「管理员入口」登录。", "error")
+            return render_template("login.html"), 400
+
         student = get_db().execute("SELECT * FROM students WHERE exam_id=?", (exam_id,)).fetchone()
         if student is None or not check_password_hash(student["password_hash"], password):
             record_login_failure(key)

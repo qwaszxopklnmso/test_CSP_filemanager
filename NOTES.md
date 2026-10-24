@@ -27,51 +27,43 @@
 ## 3. 端口与当前运行实例
 
 - Windows 的 **8000 端口被占用**（PID 11696，进程名 `Manager`，路径未知）。WSL2 的 localhost 转发会让 WSL 里也显示 8000 被占用，所以项目统一用 **8010**。
-- 当前 Windows 服务端进程：**PID 30284**（可能会变，以 `netstat -ano | findstr :8010` 为准）。
+- 当前 Windows 服务端进程：**PID 24212**（可能会变，以 `netstat -ano | findstr :8010` 为准）。
 - 监听：`0.0.0.0:8010`
   - 本机：`http://127.0.0.1:8010`
   - 局域网：`http://192.168.110.14:8010`（Windows 防火墙可能拦，需要放行）
-- 日志：`E:\CSPhtmltst\win_server.out.log`（stderr 也重定向进去了，没有 err.log）。
+- 日志：推荐用 `run_server.bat` 启动，控制台实时显示 Flask 启动信息与每次访问日志；隐藏方式才写 `E:\CSPhtmltst\win_server.out.log`。
 - 数据库当前为干净状态：2 个示例考生，0 条提交，4 个空题位。
 
 ## 4. 在 Windows 启动 / 停止（关键）
 
-### 启动（推荐，已验证稳定）
+### 启动（推荐：可见日志）
 
-WSL 里直接 `nohup ... &` 或 `Start-Process -RedirectStandardOutput` 都不稳：bash 工具会等管道、超时后进程可能被带走。用 VBS 隐藏启动最可靠。
+双击项目根目录的 `run_server.bat`，或在 Windows 终端运行：
 
-在 `E:\CSPhtmltst\_run_hidden.vbs` 写入：
-
-```vbscript
-Set sh = CreateObject("WScript.Shell")
-sh.CurrentDirectory = "E:\CSPhtmltst"
-sh.Environment("PROCESS")("CSP_PORT") = "8010"
-sh.Run "cmd /c D:\Python3.12.0\python.exe app.py > win_server.out.log 2>&1", 0, False
+```bat
+E:\CSPhtmltst\run_server.bat
 ```
 
-然后执行并删掉启动器：
+脚本会打开可见控制台，设置 `CSP_PORT=8010`、`PYTHONUNBUFFERED=1`，然后前台运行 `app.py`。Flask 的启动信息和每次请求日志会实时显示；关闭窗口即停止服务。
+
+从 WSL 启动可见窗口：
 
 ```bash
-cmd.exe /c 'wscript.exe E:\CSPhtmltst\_run_hidden.vbs'
-rm -f /mnt/e/CSPhtmltst/_run_hidden.vbs
+cmd.exe /c start "CSP Server" cmd /k E:\CSPhtmltst\run_server.bat
 ```
 
-说明：`sh.Run(..., 0, False)` 隐藏窗口且不等待；`cmd /c ... > log 2>&1` 负责重定向。Python 路径无空格，所以不用加引号。
-
 ### 停止
+
+优先直接关闭控制台窗口。也可以：
 
 ```bash
 cmd.exe /c "netstat -ano | findstr :8010"
 cmd.exe /c "taskkill /PID <PID> /F"
 ```
 
-### 其他启动方式（备选）
+### 隐藏启动（仅后台运行，不推荐）
 
-```bash
-cmd.exe /c 'cd /d E:\CSPhtmltst && set CSP_PORT=8010 && D:\Python3.12.0\python.exe app.py'
-```
-
-前台运行，占用终端，仅调试用。
+如果确实需要无窗口运行，才用 VBS 把输出重定向到 `win_server.out.log`。这种方式看不到实时日志，排查问题不方便。
 
 ## 5. 坑与规避
 
@@ -82,7 +74,7 @@ cmd.exe /c 'cd /d E:\CSPhtmltst && set CSP_PORT=8010 && D:\Python3.12.0\python.e
    cmd.exe /c 'cd /d E:\CSPhtmltst && D:\Python3.12.0\python.exe _init_check.py'
    rm /mnt/e/CSPhtmltst/_init_check.py
    ```
-3. **PowerShell Start-Process + RedirectStandardOutput 从 bash 工具调用会挂 30s**，且实测服务会莫名退出。别再用了，直接上 VBS。
+3. **PowerShell Start-Process + RedirectStandardOutput 从 bash 工具调用会挂 30s**，且实测服务会莫名退出。排查时直接用 `run_server.bat` 看控制台日志。
 4. **`cmd.exe /c "tasklist /FI \"PID eq N\""`** 引号同样会坏；查进程用 `powershell.exe -NoProfile -Command 'Get-Process -Id N'`。
 5. **Windows 原生 curl 输出带引号**：`cmd.exe /c "curl ... -w \"%{http_code}\""` 输出形如 `"200"`，正常。
 6. **WSL localhost 转发**：Windows 监听 8010 后，WSL 里 `curl 127.0.0.1:8010` 也能通；测试脚本就是走这个。
@@ -117,7 +109,7 @@ rm /mnt/e/CSPhtmltst/_init_check.py
 ## 7. 账号与关键配置
 
 - 示例选手：`HL-J0001 / 123456`、`HL-J0002 / 123456`。
-- 管理员：`admin / admin12345`（首次登录后务必改）。
+- 管理员：`admin / admin12345`，入口是 `/admin/login`（不要用选手登录页；首次登录后务必改密码）。
 - 考号正则：`config.EXAM_ID_PATTERN = r"^HL-J\d{4}$"`，登录时统一转大写。
 - 上传上限：cpp 10 MB，题目数据包 200 MB，全局请求 210 MB（`config.MAX_DATA_ZIP_SIZE` / `MAX_CONTENT_LENGTH`）。
 - 预览上限：`config.PREVIEW_MAX_BYTES = 1 MB`，超出只预览前 1 MB 并提示。
