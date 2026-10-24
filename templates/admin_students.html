@@ -4,7 +4,7 @@
 <section class="page-head">
   <div>
     <h1>考生管理</h1>
-    <p class="muted">新增考生、批量导入、重置密码、启用/禁用与删除。</p>
+    <p class="muted">新增考生、批量导入、批量生成考号、重置密码、启用/禁用与删除。</p>
   </div>
 </section>
 
@@ -47,6 +47,33 @@
       <button type="submit" class="btn btn-primary">开始导入</button>
     </form>
   </div>
+</div>
+
+<div class="card">
+  <h2>批量生成考号</h2>
+  <p class="muted">模板中用连续的 <code>%</code> 表示编号位数。例如模板 <code>HL-J%%%%X</code>，范围 0–100，会生成 <code>HL-J0000X</code> 到 <code>HL-J0100X</code> 共 101 个考号。已存在的考号会自动跳过。</p>
+  <form method="post" action="{{ url_for('admin_students_generate') }}" class="stack-form generate-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <div class="gen-grid">
+      <label>考号模板
+        <input name="template" type="text" value="HL-J%%%%X" maxlength="40" placeholder="HL-J%%%%X" required>
+      </label>
+      <label>起始编号
+        <input name="start" type="number" min="0" value="0" required>
+      </label>
+      <label>结束编号
+        <input name="end" type="number" min="0" value="100" required>
+      </label>
+      <label>步长
+        <input name="step" type="number" min="1" value="1" required>
+      </label>
+      <label>统一初始密码（留空自动生成）
+        <input name="password" type="text" placeholder="至少 6 位">
+      </label>
+    </div>
+    <p class="muted small">一次最多生成 2000 个；生成的考生默认启用，姓名为空。</p>
+    <button type="submit" class="btn btn-primary">批量生成</button>
+  </form>
 </div>
 
 <div class="card">

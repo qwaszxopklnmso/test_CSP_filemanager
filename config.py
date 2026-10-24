@@ -8,7 +8,7 @@ PROBLEMS_DIR = os.path.join(DATA_DIR, "problems")
 SUBMISSIONS_DIR = os.path.join(DATA_DIR, "submissions")
 SECRET_KEY_PATH = os.path.join(DATA_DIR, "secret_key")
 
-EXAM_ID_PATTERN = r"^HL-J\d{4}$"
+EXAM_ID_PATTERN = r"^HL-J\d{4}[A-Z]?$"
 EXAM_ID_HINT = "HL-J0001"
 
 MIN_PASSWORD_LENGTH = 6

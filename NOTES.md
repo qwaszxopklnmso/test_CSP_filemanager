@@ -27,7 +27,7 @@
 ## 3. 端口与当前运行实例
 
 - Windows 的 **8000 端口被占用**（PID 11696，进程名 `Manager`，路径未知）。WSL2 的 localhost 转发会让 WSL 里也显示 8000 被占用，所以项目统一用 **8010**。
-- 当前 Windows 服务端进程：**PID 24212**（可能会变，以 `netstat -ano | findstr :8010` 为准）。
+- 当前 Windows 服务端进程：**PID 19132**（可能会变，以 `netstat -ano | findstr :8010` 为准）。
 - 监听：`0.0.0.0:8010`
   - 本机：`http://127.0.0.1:8010`
   - 局域网：`http://192.168.110.14:8010`（Windows 防火墙可能拦，需要放行）
@@ -110,7 +110,7 @@ rm /mnt/e/CSPhtmltst/_init_check.py
 
 - 示例选手：`HL-J0001 / 123456`、`HL-J0002 / 123456`。
 - 管理员：`admin / admin12345`，入口是 `/admin/login`（不要用选手登录页；首次登录后务必改密码）。
-- 考号正则：`config.EXAM_ID_PATTERN = r"^HL-J\d{4}$"`，登录时统一转大写。
+- 考号正则：`config.EXAM_ID_PATTERN = r"^HL-J\d{4}[A-Z]?$"`，登录时统一转大写；批量生成走独立模板校验。
 - 上传上限：cpp 10 MB，题目数据包 200 MB，全局请求 210 MB（`config.MAX_DATA_ZIP_SIZE` / `MAX_CONTENT_LENGTH`）。
 - 预览上限：`config.PREVIEW_MAX_BYTES = 1 MB`，超出只预览前 1 MB 并提示。
 - 时间判断：服务器本地时间，`%Y-%m-%dT%H:%M`；截止后服务端拒绝上传，不只靠前端禁用。
@@ -128,6 +128,8 @@ rm /mnt/e/CSPhtmltst/_init_check.py
 - 选手下载：`GET /data/download`（需登录）；管理员检查下载：`GET /admin/problems/data/download`；上传 `POST /admin/problems/data/zip`；删除 `POST /admin/problems/data/zip/delete`。
 - 已移除旧的“每题一个 zip”逻辑（problems.zip_name 不再使用，旧库多出的列无害）。
 - 在线预览：`load_source_preview()` 读取源码（utf-8-sig → gb18030 → utf-8 replace），`highlight_cpp_line()` 做行级 C++ 词法高亮（支持跨行块注释），所有原文先 HTML 转义，模板里用 `|safe` 输出高亮结果。token 类名 `tok-kw/type/str/com/num/pre/fn`，样式在 `style.css` 的 Code preview 段。
+- 批量生成考号已手工验证：模板 `HL-J%%%%X`、范围 0–3 生成 `HL-J0000X`–`HL-J0003X`，可用统一密码登录；重复生成会跳过。
+- 批量生成考号：`POST /admin/students/generate`，模板用连续 `%` 表示编号位数（如 `HL-J%%%%X`），支持起止编号、步长、统一初始密码；跳过已存在考号，单次上限 2000。生成的 ID 只允许安全字符，避免路径注入。`EXAM_ID_PATTERN` 已放宽为 `^HL-J\d{4}[A-Z]?$`，支持 `HL-J0000X` 这类后缀。
 - 预览路由：选手 `GET /submission/<code>/preview`（只能看自己的），管理员 `GET /admin/submissions/<sid>/preview`；模板 `templates/preview.html`，含行号、复制、下载。
 - 页面特效：渐变流动背景/顶栏、卡片入场与悬停、状态呼吸点、按钮渐变与水波纹、数字滚动、表格悬停强调；已适配 `prefers-reduced-motion`。不要依赖 CDN。
 - 文件选择：`static/app.js` 增强 `.file-drop`（点击/拖拽、选中文件名、拖拽高亮），并处理 `.btn` 水波纹与 `.stat-num` 数字滚动；新增文件输入统一用 `.file-drop` 结构。

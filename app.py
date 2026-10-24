@@ -1028,6 +1028,93 @@ def admin_students_import():
     return redirect(url_for("admin_students"))
 
 
+@app.route("/admin/students/generate", methods=["POST"])
+@admin_required
+def admin_students_generate():
+    template = (request.form.get("template") or "").strip().upper()
+    if not template:
+        flash("请输入考号模板。", "error")
+        return redirect(url_for("admin_students"))
+    if len(template) > 40 or not re.fullmatch(r"[A-Z0-9_-]*%+[A-Z0-9_-]*", template):
+        flash("考号模板只能包含字母、数字、-、_ 和 % 占位符。", "error")
+        return redirect(url_for("admin_students"))
+    runs = re.findall(r"%+", template)
+    if len(runs) != 1:
+        flash("考号模板必须包含且只包含一段连续的 % 占位符。", "error")
+        return redirect(url_for("admin_students"))
+    width = len(runs[0])
+    if width > 8:
+        flash("考号模板的 % 占位符最多 8 位。", "error")
+        return redirect(url_for("admin_students"))
+    prefix, suffix = template.split(runs[0], 1)
+
+    try:
+        start = int(request.form.get("start", ""))
+        end = int(request.form.get("end", ""))
+        step = int(request.form.get("step") or "1")
+    except (TypeError, ValueError):
+        flash("起始编号、结束编号和步长必须是整数。", "error")
+        return redirect(url_for("admin_students"))
+    if start < 0 or end < start or step < 1:
+        flash("范围需满足 0 ≤ 起始编号 ≤ 结束编号，步长 ≥ 1。", "error")
+        return redirect(url_for("admin_students"))
+    if len(str(end)) > width:
+        flash(f"结束编号 {end} 超出模板的 {width} 位编号宽度。", "error")
+        return redirect(url_for("admin_students"))
+    count = (end - start) // step + 1
+    if count > 2000:
+        flash("一次最多生成 2000 个考号。", "error")
+        return redirect(url_for("admin_students"))
+
+    password = request.form.get("password") or ""
+    auto_password = not password
+    if auto_password:
+        password = generate_password()
+    elif len(password) < config.MIN_PASSWORD_LENGTH:
+        flash(f"统一初始密码至少 {config.MIN_PASSWORD_LENGTH} 位。", "error")
+        return redirect(url_for("admin_students"))
+
+    ids = []
+    for number in range(start, end + 1, step):
+        exam_id = f"{prefix}{number:0{width}d}{suffix}"
+        if exam_id == config.DEFAULT_ADMIN_USERNAME.upper():
+            flash("考号模板不能生成与管理员账号相同的考号。", "error")
+            return redirect(url_for("admin_students"))
+        if len(exam_id) > 32 or not re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{2,31}", exam_id):
+            flash(f"生成的考号格式不安全或过长：{exam_id}", "error")
+            return redirect(url_for("admin_students"))
+        ids.append(exam_id)
+
+    db = get_db()
+    existing = {row["exam_id"] for row in db.execute("SELECT exam_id FROM students").fetchall()}
+    created = []
+    skipped = 0
+    password_hash = generate_password_hash(password)
+    created_at = now_str()
+    for exam_id in ids:
+        if exam_id in existing:
+            skipped += 1
+            continue
+        db.execute(
+            "INSERT INTO students (exam_id, name, password_hash, enabled, created_at) VALUES (?, ?, ?, 1, ?)",
+            (exam_id, "", password_hash, created_at),
+        )
+        existing.add(exam_id)
+        created.append(exam_id)
+    db.commit()
+
+    if created:
+        flash(f"批量生成完成：新增 {len(created)} 个考号，跳过 {skipped} 个已存在。", "success")
+        flash(f"生成范围：{created[0]} ~ {created[-1]}。", "success")
+        if auto_password:
+            flash(f"统一初始密码：{password}（请立即告知选手）。", "success")
+        else:
+            flash("已使用你填写的统一初始密码。", "success")
+    else:
+        flash("没有新增考号：生成的考号都已存在。", "error")
+    return redirect(url_for("admin_students"))
+
+
 @app.route("/admin/students/<int:sid>/password", methods=["POST"])
 @admin_required
 def admin_reset_password(sid):

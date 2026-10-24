@@ -435,6 +435,12 @@ textarea { resize: vertical; }
 
 .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
 .stack-form { display: flex; flex-direction: column; gap: 4px; }
+.gen-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr .8fr 1.6fr;
+  gap: 0 14px;
+}
+.gen-grid label { margin-top: 10px; }
 .stack-form label { margin-top: 10px; }
 .stack-form .btn { margin-top: 14px; align-self: flex-start; }
 .check-line { display: flex; align-items: center; gap: 8px; font-weight: 500; }
@@ -483,6 +489,7 @@ textarea { resize: vertical; }
 
 @media (max-width: 900px) {
   .problem-grid, .two-col { grid-template-columns: 1fr; }
+  .gen-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-layout { grid-template-columns: 1fr; }
   .admin-nav { position: static; flex-direction: row; flex-wrap: wrap; }
@@ -766,6 +773,10 @@ textarea { resize: vertical; }
 }
 @keyframes rippleOut {
   to { transform: scale(3.2); opacity: 0; }
+}
+
+@media (max-width: 600px) {
+  .gen-grid { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
