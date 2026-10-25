@@ -148,6 +148,22 @@ rm /mnt/e/CSPhtmltst/_init_check.py
 - 没有“提交后自动评测”，纯文件回收；没有查重/代码相似度。
 - `data/` 定期备份；比赛结束先打包下载全部提交再做任何操作。
 
+### 2026-10-25 安全与稳定性修复（v1.0.3 候选）
+
+- **X-Forwarded-For 默认不信任**：客户端可伪造该头绕过登录限速，已改为只有设 `CSP_TRUST_PROXY=1`（部署在 nginx 等可信反代后）才读取；限速字典每分钟清理过期条目。
+- **`app.run` 加了 `threaded=True`**：此前单线程，一人下载 200MB 数据包全站阻塞。SQLite 已开 WAL + 10s 忙等，`data/` 下会多出 `app.db-wal` / `app.db-shm`，属正常现象。
+- **管理端“打包下载”改写临时文件**（`data/.bundle_*.zip`）再流式发送，响应关闭时删除；即便中断也有兜底清扫（超过 1 小时的残留，访问提交管理页时清）。
+- 题目数据包 zip 结构检查结果按 mtime+size 缓存，学生每次刷新 dashboard 不再重复解析 200MB 压缩包。
+- 登录支持 `?next=` 回跳（仅站内相对路径）；新增 500 错误页、CSP 响应头、数据包下载 10s 冷却、姓名 64 字/题目名 100 字上限、预览截断多字节乱码修复、缺考统计改按启用考生数。
+- 密码本来就是 werkzeug 加盐哈希（scrypt，格式 `scrypt:32768:8:1$盐$哈希`），已复核确认，无需迁移。
+
+### 2026-10-25 Linux 兼容性验证（WSL）
+
+- WSL 内核 6.18，`python3` = 3.12.3，Flask 3.1.3 / Werkzeug 3.1.9（user site 安装），与 Windows 侧同版本。
+- 代码**零修改**通过全套 Linux 冒烟（`_linux_smoke.py`，11/11）：限速、登录、提交、预览、数据包上传/下载/冷却、管理端打包下载与临时文件清理（真实服务器路径验证 ClosingIterator 生效）、密码哈希格式。
+- 新增 `run_server.sh`（默认 8010，前台日志），已在 WSL 实测启动成功；`.gitattributes` 已有 `*.sh eol=lf`，提交时记得 `git update-index --chmod=+x run_server.sh` 保住可执行位（drvfs 上 chmod 不落盘）。
+- Windows/WSL 共用同一份工作区（`/mnt/e/CSPhtmltst`），`data/` 数据库两边都能读写；并发跑两个实例时注意端口与 WAL 文件同库，别同时开。
+
 ## 10. Git 发布约定
 
 - 小更新 / 功能修正：提交后打补丁 tag（如 `v1.0.1`、`v1.0.2`）并 push tag。

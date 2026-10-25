@@ -19,6 +19,7 @@ secret_key
 # Local launchers / temp files
 _run_hidden.vbs
 _init_check.py
+_linux_smoke.py
 _snap*
 *.tmp
 *.bak

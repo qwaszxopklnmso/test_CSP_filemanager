@@ -1,20 +1,21 @@
 import csv
 import hashlib
-import io
 import os
 import re
 import secrets
 import shutil
 import sqlite3
+import tempfile
 import threading
 import time
 import zipfile
 from datetime import datetime
 from functools import wraps
 
-from flask import (Flask, abort, flash, g, redirect, render_template, request,
-                   send_file, send_from_directory, session, url_for)
+from flask import (Flask, abort, flash, g, redirect, render_template,
+                   request, send_file, send_from_directory, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.wsgi import ClosingIterator
 
 import config
 
@@ -48,7 +49,7 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(config.DB_PATH)
+        g.db = sqlite3.connect(config.DB_PATH, timeout=10)
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
@@ -110,8 +111,9 @@ DEFAULT_SETTINGS = {
 
 
 def init_db():
-    db = sqlite3.connect(config.DB_PATH)
+    db = sqlite3.connect(config.DB_PATH, timeout=10)
     db.row_factory = sqlite3.Row
+    db.execute("PRAGMA journal_mode = WAL")
     db.executescript(SCHEMA)
     now = now_str()
 
@@ -235,11 +237,27 @@ _login_failures = {}
 _login_lock = threading.Lock()
 LOGIN_LIMIT = 10
 LOGIN_WINDOW = 60
+_last_login_sweep = 0.0
+
+
+def _sweep_login_failures(now):
+    """丢弃整条过期的失败记录，防止字典按伪造 IP 无限增长。"""
+    global _last_login_sweep
+    if now - _last_login_sweep < LOGIN_WINDOW:
+        return
+    _last_login_sweep = now
+    for key in list(_login_failures):
+        fresh = [t for t in _login_failures[key] if now - t < LOGIN_WINDOW]
+        if fresh:
+            _login_failures[key] = fresh
+        else:
+            del _login_failures[key]
 
 
 def login_blocked(key):
     now = time.time()
     with _login_lock:
+        _sweep_login_failures(now)
         attempts = [t for t in _login_failures.get(key, []) if now - t < LOGIN_WINDOW]
         _login_failures[key] = attempts
         return len(attempts) >= LOGIN_LIMIT
@@ -256,7 +274,11 @@ def clear_login_failures(key):
 
 
 def client_ip():
-    return request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
+    if config.TRUST_PROXY_HEADERS:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return request.remote_addr or ""
 
 
 @app.before_request
@@ -288,6 +310,15 @@ def student_required(view):
         return view(*args, **kwargs)
 
     return wrapper
+
+
+def safe_next_target(target):
+    """只允许站内相对路径，防止开放重定向。"""
+    if not target or not target.startswith("/") or target.startswith("//"):
+        return None
+    if "\\" in target:
+        return None
+    return target
 
 
 def current_admin():
@@ -427,16 +458,32 @@ def inspect_data_package(path):
     return info
 
 
+_zip_info_cache = {"key": None, "info": None, "lock": threading.Lock()}
+
+
 def get_data_package():
     path = data_zip_path()
     if not os.path.exists(path):
         return None
+    try:
+        stat = os.stat(path)
+        cache_key = (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        cache_key = None
     settings = get_settings()
+    with _zip_info_cache["lock"]:
+        if cache_key is not None and _zip_info_cache["key"] == cache_key:
+            info = _zip_info_cache["info"]
+        else:
+            info = inspect_data_package(path)
+            if cache_key is not None:
+                _zip_info_cache["key"] = cache_key
+                _zip_info_cache["info"] = info
     return {
         "name": settings.get("data_zip_name") or config.DATA_ZIP_FILENAME,
         "updated": settings.get("data_zip_updated") or "",
         "size": os.path.getsize(path),
-        "info": inspect_data_package(path),
+        "info": info,
     }
 
 
@@ -573,14 +620,24 @@ def load_source_preview(path):
         data = data[: config.PREVIEW_MAX_BYTES]
 
     text = None
-    for encoding in ("utf-8-sig", "gb18030"):
-        try:
-            text = data.decode(encoding)
-            break
-        except UnicodeDecodeError:
-            continue
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        pass
+    if text is None and truncated:
+        # 截断可能切在 UTF-8 多字节字符中间：退掉末尾几个字节再试，
+        # 避免误判成 GBK 而整页乱码
+        for cut in range(1, 4):
+            try:
+                text = data[: len(data) - cut].decode("utf-8-sig")
+                break
+            except UnicodeDecodeError:
+                continue
     if text is None:
-        text = data.decode("utf-8", errors="replace")
+        try:
+            text = data.decode("gb18030")
+        except UnicodeDecodeError:
+            text = data.decode("utf-8", errors="replace")
 
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     lines = text.split("\n")
@@ -618,44 +675,46 @@ def login():
     if current_student() is not None:
         return redirect(url_for("dashboard"))
 
+    next_target = safe_next_target(request.values.get("next"))
+
     if request.method == "POST":
         settings = get_settings()
         if settings.get("login_enabled") != "1":
             flash("登录通道已关闭，请联系监考老师。", "error")
-            return render_template("login.html"), 403
+            return render_template("login.html", next_target=next_target), 403
 
         key = "student:" + client_ip()
         if login_blocked(key):
             flash("尝试次数过多，请 1 分钟后再试。", "error")
-            return render_template("login.html"), 429
+            return render_template("login.html", next_target=next_target), 429
 
         exam_id = normalize_exam_id(request.form.get("exam_id"))
         password = request.form.get("password") or ""
         if not exam_id or not password:
             flash("请输入考号与密码。", "error")
-            return render_template("login.html"), 400
+            return render_template("login.html", next_target=next_target), 400
 
         if exam_id == config.DEFAULT_ADMIN_USERNAME.upper():
             flash("管理员账号请从右上角「管理员入口」登录。", "error")
-            return render_template("login.html"), 400
+            return render_template("login.html", next_target=next_target), 400
 
         student = get_db().execute("SELECT * FROM students WHERE exam_id=?", (exam_id,)).fetchone()
         if student is None or not check_password_hash(student["password_hash"], password):
             record_login_failure(key)
             flash("考号或密码错误。", "error")
-            return render_template("login.html"), 401
+            return render_template("login.html", next_target=next_target), 401
         if not student["enabled"]:
             flash("该账号已被禁用，请联系监考老师。", "error")
-            return render_template("login.html"), 403
+            return render_template("login.html", next_target=next_target), 403
 
         clear_login_failures(key)
         session.clear()
         session["student_id"] = student["id"]
         session["student_exam_id"] = student["exam_id"]
         flash("登录成功，欢迎 %s。" % student["exam_id"], "success")
-        return redirect(url_for("dashboard"))
+        return redirect(next_target or url_for("dashboard"))
 
-    return render_template("login.html")
+    return render_template("login.html", next_target=next_target)
 
 
 @app.route("/logout", methods=["POST"])
@@ -760,12 +819,30 @@ def submit_file(code):
     return redirect(url_for("dashboard"))
 
 
+_data_download_last = {}
+_data_download_lock = threading.Lock()
+
+
+def data_download_allowed(student_id):
+    now = time.time()
+    with _data_download_lock:
+        last = _data_download_last.get(student_id, 0)
+        if now - last < config.DATA_DOWNLOAD_COOLDOWN:
+            return False
+        _data_download_last[student_id] = now
+        return True
+
+
 @app.route("/data/download")
 @student_required
 def download_data_package():
+    student = current_student()
     package = get_data_package()
     if package is None:
         flash("题目数据压缩包尚未上传，请联系监考老师。", "error")
+        return redirect(url_for("dashboard"))
+    if not data_download_allowed(student["id"]):
+        flash("下载太频繁，请 %d 秒后再试。" % config.DATA_DOWNLOAD_COOLDOWN, "error")
         return redirect(url_for("dashboard"))
     return send_file(
         data_zip_path(),
@@ -829,32 +906,34 @@ def admin_login():
     if current_admin() is not None:
         return redirect(url_for("admin_dashboard"))
 
+    next_target = safe_next_target(request.values.get("next"))
+
     if request.method == "POST":
         key = "admin:" + client_ip()
         if login_blocked(key):
             flash("尝试次数过多，请 1 分钟后再试。", "error")
-            return render_template("admin_login.html"), 429
+            return render_template("admin_login.html", next_target=next_target), 429
 
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
         if not username or not password:
             flash("请输入管理员账号与密码。", "error")
-            return render_template("admin_login.html"), 400
+            return render_template("admin_login.html", next_target=next_target), 400
 
         admin = get_db().execute("SELECT * FROM admins WHERE username=?", (username,)).fetchone()
         if admin is None or not check_password_hash(admin["password_hash"], password):
             record_login_failure(key)
             flash("管理员账号或密码错误。", "error")
-            return render_template("admin_login.html"), 401
+            return render_template("admin_login.html", next_target=next_target), 401
 
         clear_login_failures(key)
         session.clear()
         session["admin_id"] = admin["id"]
         session["admin_username"] = admin["username"]
         flash("管理员登录成功。", "success")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(next_target or url_for("admin_dashboard"))
 
-    return render_template("admin_login.html")
+    return render_template("admin_login.html", next_target=next_target)
 
 
 @app.route("/admin/logout", methods=["POST"])
@@ -892,7 +971,7 @@ def admin_dashboard():
                 "code": problem["code"],
                 "title": problem["title"],
                 "submitted": submitted,
-                "missing": max(total_students - submitted, 0),
+                "missing": max(enabled_students - submitted, 0),
             }
         )
     return render_template(
@@ -934,6 +1013,9 @@ def parse_import_text(text):
         if not valid_exam_id(exam_id):
             errors.append("第 %d 行：考号格式不正确「%s」" % (line_no, cells[0]))
             continue
+        if len(name) > config.MAX_NAME_LENGTH:
+            errors.append("第 %d 行：姓名超过 %d 个字符「%s」" % (line_no, config.MAX_NAME_LENGTH, exam_id))
+            continue
         if len(password) < config.MIN_PASSWORD_LENGTH:
             errors.append("第 %d 行：密码至少 %d 位" % (line_no, config.MIN_PASSWORD_LENGTH))
             continue
@@ -956,6 +1038,9 @@ def admin_students():
         generated = False
         if not valid_exam_id(exam_id):
             flash("考号格式不正确，应为 %s 形式。" % config.EXAM_ID_HINT, "error")
+            return redirect(url_for("admin_students"))
+        if len(name) > config.MAX_NAME_LENGTH:
+            flash("姓名不能超过 %d 个字符。" % config.MAX_NAME_LENGTH, "error")
             return redirect(url_for("admin_students"))
         if not password:
             password = generate_password()
@@ -1227,6 +1312,9 @@ def admin_problem_title(code):
     if not title:
         flash("题目名称不能为空。", "error")
         return redirect(url_for("admin_problems"))
+    if len(title) > config.MAX_PROBLEM_TITLE_LENGTH:
+        flash("题目名称不能超过 %d 个字符。" % config.MAX_PROBLEM_TITLE_LENGTH, "error")
+        return redirect(url_for("admin_problems"))
     get_db().execute("UPDATE problems SET title=?, updated_at=? WHERE code=?", (title, now_str(), code))
     get_db().commit()
     flash("题目名称已更新为「%s」。" % title, "success")
@@ -1342,6 +1430,7 @@ def submission_query(args):
 @app.route("/admin/submissions")
 @admin_required
 def admin_submissions():
+    _cleanup_stale_bundles()
     rows, q, problem = submission_query(request.args)
     problems = get_db().execute("SELECT code, title FROM problems ORDER BY code").fetchall()
     return render_template(
@@ -1403,30 +1492,76 @@ def admin_submission_preview(sid):
     )
 
 
+def _remove_bundle(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def _cleanup_stale_bundles():
+    """清理历史残留的打包临时文件（响应中断时 call_on_close 可能没跑）。"""
+    now = time.time()
+    try:
+        entries = os.listdir(config.DATA_DIR)
+    except OSError:
+        return
+    for name in entries:
+        if not name.startswith(".bundle_"):
+            continue
+        path = os.path.join(config.DATA_DIR, name)
+        try:
+            if now - os.path.getmtime(path) > 3600:
+                os.remove(path)
+        except OSError:
+            continue
+
+
 @app.route("/admin/submissions/download-all")
 @admin_required
 def admin_submission_download_all():
     rows, _q, _problem = submission_query(request.args)
-    buffer = io.BytesIO()
-    included = 0
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle:
-        for row in rows:
-            path = submission_path(row["exam_id"], row["stored_name"])
-            if not os.path.exists(path):
-                continue
-            bundle.write(path, arcname="%s/%s" % (row["exam_id"], row["stored_name"]))
-            included += 1
-    if included == 0:
+    if not rows:
         flash("当前筛选条件下没有可下载的提交。", "error")
         return redirect(url_for("admin_submissions", **request.args))
-    buffer.seek(0)
+    fd, bundle_path = tempfile.mkstemp(prefix=".bundle_", suffix=".zip", dir=config.DATA_DIR)
+    os.close(fd)
+    included = 0
+    try:
+        with zipfile.ZipFile(bundle_path, "w", zipfile.ZIP_DEFLATED) as bundle:
+            for row in rows:
+                path = submission_path(row["exam_id"], row["stored_name"])
+                if not os.path.exists(path):
+                    continue
+                bundle.write(path, arcname="%s/%s" % (row["exam_id"], row["stored_name"]))
+                included += 1
+        if included == 0:
+            os.remove(bundle_path)
+            flash("当前筛选条件下没有可下载的提交。", "error")
+            return redirect(url_for("admin_submissions", **request.args))
+    except BaseException:
+        _remove_bundle(bundle_path)
+        raise
+
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return send_file(
-        buffer,
+    fh = open(bundle_path, "rb")
+    response = send_file(
+        fh,
         mimetype="application/zip",
         as_attachment=True,
         download_name="submissions_%s.zip" % stamp,
     )
+
+    def _close_and_remove():
+        # 先关句柄再删文件（Windows 上打开中的文件无法删除）。
+        # 包在 ClosingIterator 里，任何 WSGI 服务器发完响应都会调用 close()。
+        try:
+            fh.close()
+        finally:
+            _remove_bundle(bundle_path)
+
+    response.response = ClosingIterator(response.response, _close_and_remove)
+    return response
 
 
 @app.route("/admin/settings", methods=["GET", "POST"])
@@ -1511,11 +1646,22 @@ def too_large(_error):
     return render_template("error.html", code=413, message="上传内容超过服务器允许的大小"), 413
 
 
+@app.errorhandler(500)
+def server_error(_error):
+    return render_template("error.html", code=500, message="服务器内部错误，请稍后重试或联系管理员"), 500
+
+
 @app.after_request
 def security_headers(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     response.headers.setdefault("Referrer-Policy", "same-origin")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'",
+    )
     return response
 
 
@@ -1523,4 +1669,4 @@ init_db()
 
 
 if __name__ == "__main__":
-    app.run(host=config.HOST, port=config.PORT, debug=False)
+    app.run(host=config.HOST, port=config.PORT, debug=False, threaded=True)

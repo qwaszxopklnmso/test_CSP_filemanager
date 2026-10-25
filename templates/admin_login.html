@@ -7,6 +7,7 @@
     <p class="muted">用于考生管理、题目资料、提交回收与比赛设置。</p>
     <form method="post" action="{{ url_for('admin_login') }}" autocomplete="off">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ next_target or '' }}">
       <label for="username">管理员账号</label>
       <input id="username" name="username" type="text" placeholder="请输入管理员账号" required autofocus>
       <label for="password">密码</label>

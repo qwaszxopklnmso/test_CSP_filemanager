@@ -36,3 +36,10 @@ DEMO_STUDENTS = [
 
 HOST = os.environ.get("CSP_HOST", "0.0.0.0")
 PORT = int(os.environ.get("CSP_PORT", "8000"))
+# 仅当部署在可信反向代理（nginx 等）后面时设 CSP_TRUST_PROXY=1，此时才读取
+# X-Forwarded-For；否则客户端可伪造该头绕过登录限速。
+TRUST_PROXY_HEADERS = os.environ.get("CSP_TRUST_PROXY", "") == "1"
+
+MAX_NAME_LENGTH = 64
+MAX_PROBLEM_TITLE_LENGTH = 100
+DATA_DOWNLOAD_COOLDOWN = 10

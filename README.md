@@ -56,8 +56,10 @@ cd test_CSP_filemanager
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-CSP_PORT=8010 python app.py
+./run_server.sh        # 或 CSP_PORT=8010 python app.py
 ```
+
+`run_server.sh` 会前台运行并实时输出日志（默认端口 8010，可用 `CSP_PORT` 覆盖），Ctrl+C 停止。已在 WSL（Ubuntu，Python 3.12 + Flask 3.1）验证通过。
 
 默认监听 `0.0.0.0:8000`，可通过环境变量修改：
 
@@ -133,6 +135,7 @@ CSP-S2-题目数据.zip
 ├── config.py                  # 配置项
 ├── requirements.txt           # Python 依赖
 ├── run_server.bat             # Windows 可见控制台启动脚本
+├── run_server.sh              # Linux / WSL / macOS 启动脚本
 ├── static/
 │   ├── style.css              # 页面样式与动效
 │   └── app.js                 # 文件拖拽、水波纹、数字滚动

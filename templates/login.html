@@ -7,6 +7,7 @@
     <p class="muted">请输入考号与密码进入文件回收系统。考号示例：{{ exam_id_hint }}</p>
     <form method="post" action="{{ url_for('login') }}" autocomplete="off">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ next_target or '' }}">
       <label for="exam_id">考号</label>
       <input id="exam_id" name="exam_id" type="text" placeholder="{{ exam_id_hint }}" required autofocus>
       <label for="password">密码</label>
